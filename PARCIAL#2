@@ -1,0 +1,128 @@
+import soundfile as sf
+from scipy import signal
+import numpy as np
+import tkinter as tk
+from PIL import Image, ImageTk
+import sounddevice as sd
+
+def aplicar_filtro_pasa_baja(audio, sample_rate, cutoff_freq):
+    orden = 4
+    b, a = signal.butter(orden, cutoff_freq / (sample_rate / 2), btype='low')
+    filtered_audio = signal.lfilter(b, a, audio)
+    sf.write("LowPass_audio.wav", filtered_audio, sample_rate)
+    return filtered_audio
+
+def reproducir_audio(audio, sample_rate):
+    sd.play(audio, sample_rate)
+    sd.wait()
+
+def obtener_frecuencia_y_aplicar_filtro():
+    valor_ingresado = entrada_frecuencia.get()
+    try:
+        cutoff_freq = int(valor_ingresado)
+        if cutoff_freq <= 0:
+            raise ValueError("La frecuencia de corte debe ser un número entero positivo.")
+        filtered_audio = aplicar_filtro_pasa_baja(audio, sample_rate, cutoff_freq)
+        etiqueta_resultado.config(text=f"Filtro aplicado con frecuencia de corte: {cutoff_freq} Hz", fg="green")
+        reproducir_audio(filtered_audio, sample_rate)
+    except ValueError:
+        etiqueta_resultado.config(text="Error: Debe ingresar un número entero positivo.", fg="red")
+
+def aplicar_efecto_flanger(audio, sample_rate, delay_ms, depth, osc_freq):
+    delay_samples = int(delay_ms * sample_rate / 1000)
+    audio_length = len(audio)
+    flanger_audio = np.zeros_like(audio)
+    
+    for i in range(audio_length):
+        delay = delay_samples * (1 + depth * np.sin(2 * np.pi * osc_freq * i / sample_rate))
+        delay = int(min(delay, i))
+        flanger_audio[i] = audio[i] + audio[i - delay]
+    
+    max_val = np.max(np.abs(flanger_audio))
+    if max_val > 0:
+        flanger_audio = flanger_audio / max_val
+    
+    sf.write("Flanger_audio.wav", flanger_audio, sample_rate)
+    return flanger_audio
+
+def aplicar_flanger():
+    delay_ms = float(entrada_delay.get())
+    depth = float(entrada_depth.get())
+    osc_freq = float(entrada_osc_freq.get())
+    flanger_audio = aplicar_efecto_flanger(audio, sample_rate, delay_ms, depth, osc_freq)
+    reproducir_audio(flanger_audio, sample_rate)
+
+def aplicar_speedup(audio, sample_rate, speed_factor):
+    indices = np.arange(0, len(audio), speed_factor)
+    indices = indices[indices < len(audio)].astype(int)
+    speedup_audio = audio[indices]
+    sf.write("Speedup_audio.wav", speedup_audio, sample_rate)
+    return speedup_audio
+
+def aumentar_velocidad():
+    speed_factor = float(entrada_speed_factor.get())
+    speedup_audio = aplicar_speedup(audio, sample_rate, speed_factor)
+    reproducir_audio(speedup_audio, sample_rate)
+
+# Cargar archivo de audio
+AUDIO = "AudioPrueba.wav"
+audio, sample_rate = sf.read(AUDIO)
+
+##CREAR LAS INTERFACES
+
+# Crear interfaz gráfica
+ventana = tk.Tk()
+ventana.title("Procesador de Audio")
+ventana.geometry('600x400')
+
+imagen_fondo = Image.open("frecuencia.jpg")
+imagen_fondo = imagen_fondo.resize((600, 400), Image.ANTIALIAS)
+imagen_fondo = ImageTk.PhotoImage(imagen_fondo)
+
+# Configurar la imagen de fondo
+etiqueta_fondo = tk.Label(ventana, image=imagen_fondo)
+etiqueta_fondo.place(relwidth=1, relheight=1)
+
+# Interfaz para Filtro Pasa Baja
+frame_filtro = tk.Frame(ventana)
+frame_filtro.pack(pady=10)
+
+tk.Label(frame_filtro, text="Filtro Pasa Baja").grid(row=0, columnspan=2)
+tk.Label(frame_filtro, text="Frecuencia de corte (Hz):").grid(row=1, column=0, sticky='e')
+entrada_frecuencia = tk.Entry(frame_filtro)
+entrada_frecuencia.grid(row=1, column=1, padx=5)
+boton_aplicar_filtro = tk.Button(frame_filtro, text="Aplicar y Reproducir", command=obtener_frecuencia_y_aplicar_filtro)
+boton_aplicar_filtro.grid(row=2, columnspan=2, pady=5)
+
+# Interfaz para Efecto Flanger
+frame_flanger = tk.Frame(ventana)
+frame_flanger.pack(pady=10)
+
+tk.Label(frame_flanger, text="Efecto Flanger").grid(row=0, columnspan=2)
+tk.Label(frame_flanger, text="Retardo (ms):").grid(row=1, column=0, sticky='e')
+entrada_delay = tk.Entry(frame_flanger)
+entrada_delay.grid(row=1, column=1, padx=5)
+tk.Label(frame_flanger, text="Profundidad:").grid(row=2, column=0, sticky='e')
+entrada_depth = tk.Entry(frame_flanger)
+entrada_depth.grid(row=2, column=1, padx=5)
+tk.Label(frame_flanger, text="Frec. Oscilador (Hz):").grid(row=3, column=0, sticky='e')
+entrada_osc_freq = tk.Entry(frame_flanger)
+entrada_osc_freq.grid(row=3, column=1, padx=5)
+boton_aplicar_flanger = tk.Button(frame_flanger, text="Aplicar y Reproducir", command=aplicar_flanger)
+boton_aplicar_flanger.grid(row=4, columnspan=2, pady=5)
+
+# Interfaz para Aumento de Velocidad
+frame_speedup = tk.Frame(ventana)
+frame_speedup.pack(pady=10)
+
+tk.Label(frame_speedup, text="Aumento de Velocidad").grid(row=0, columnspan=2)
+tk.Label(frame_speedup, text="Factor de Velocidad:").grid(row=1, column=0, sticky='e')
+entrada_speed_factor = tk.Entry(frame_speedup)
+entrada_speed_factor.grid(row=1, column=1, padx=5)
+boton_aumentar_velocidad = tk.Button(frame_speedup, text="Aplicar y Reproducir", command=aumentar_velocidad)
+boton_aumentar_velocidad.grid(row=2, columnspan=2, pady=5)
+
+etiqueta_resultado = tk.Label(ventana, text="")
+etiqueta_resultado.pack(pady=10)
+
+ventana.mainloop()
